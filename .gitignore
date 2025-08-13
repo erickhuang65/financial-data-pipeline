@@ -1,0 +1,54 @@
+cat > .gitignore << 'EOF'
+# Environment variables
+.env
+*.env
+
+# Google Cloud SDK
+google-cloud-sdk/
+google-cloud-cli-*.tar.gz
+
+# IDE files
+.idea/
+*.iml
+
+# Large downloads
+*.tar.gz
+*.zip
+EOF
+
+# Credentials
+*.json
+*key.json
+service-account-key.json
+
+# Virtual environment
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Jupyter
+.ipynb_checkpoints/
+.jupyter/
+
+# Logs
+logs/
+*.log
+
+# OS files
+.DS_Store
+.vscode/
+.idea/
+
+
+
+# Data files (optional - uncomment if you don't want to track data)
+# *.csv
+# *.json
+# data/
+EOF
