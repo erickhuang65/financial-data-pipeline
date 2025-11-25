@@ -23,7 +23,6 @@ for row in rows:
     col = row.find_all('td')
     if len(col) != 0:
         data_dict = {'Ticker': col[0].contents[0]}
-
         df1 = pd.DataFrame(data_dict, index=[0])
         dataframe = pd.concat([dataframe, df1], ignore_index=True)
 

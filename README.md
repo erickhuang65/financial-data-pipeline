@@ -32,7 +32,6 @@ Jupyter & Notebook Ecosystem
 - jupyter
 - jupyterlab
 
-
 **System Requirement**
 
 **Installation & Setup**
