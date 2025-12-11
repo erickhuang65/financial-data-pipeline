@@ -57,6 +57,9 @@ class BigQueryConnector:
             location: Geographic location to default US
             exists_ok: 
         """
+        dataset_ref = f"{self.project_id}.{dataset_id}"
+        dataset = bigquery.Dataset(dataset_ref)
+        dataset.location = location
         try:
             dataset = self.client.create_dataset(dataset, exists_ok=exists_ok)
             self.logger.info(f"Dataset {dataset_id} created or already exists")
