@@ -34,7 +34,9 @@ class ETLProcessor:
 
     # could add error handling when symbol isn't found from the ticker_list
     def advantage_extract(self, ticker_list):
-        """Takes ticker as dataframe and process each ticker"""
+        """
+        Takes ticker as dataframe and process each ticker
+        """
         self.data = [] # self data is reseted after each extraction is performed
         if not ticker_list:
             self.logger.error(f"Stock ticker csv not found")
@@ -49,7 +51,9 @@ class ETLProcessor:
         return self.data
 
     def fmp_extract(self, ticker_list):
-        """Takes ticker as dataframe and process each ticker"""
+        """
+        Takes ticker as dataframe and process each ticker
+        """
         self.data = []
         counter = 0 
         if not ticker_list:
@@ -69,24 +73,31 @@ class ETLProcessor:
 
     def transform(self, extracted_data: Optional[list[dict]] = None):
         """
-        Transforms nested FMP data into flat structure for BigQuery
         Args:
-            extracted_data: List of ticker data dictionaries, or None to use self.data
+            Extracted data from FMP
         Returns:
-            Pandas DataFrame to load to BigQuery
+            Pandas dataframe
         """
-        self.formatted_records = []
+        if not extracted_data:
+            self.logger.error("No data to transform")
+            print("🚫 No data to transform")
+        
         try:
-            for stock in extracted_data[0]:
-                self.formatted_record = {}
-                for key, value in stock.items():
-                    self.formatted_record[key] = value
-                self.formatted_records.append(self.formatted_record)
-            self.df = pd.DataFrame(self.formatted_records)
-            return self.df
+            if isinstance(extracted_data[0], list):
+                flat_data = extracted_data[0]
+            else:
+                flat_data = extracted_data
+
+            df = pd.DataFrame(flat_data)
+
+            df['data'] = pd.to_datetime(df['date'])
+            df['volume'] = df['volume'].astype('int64')
+
+            self.logger.info(f"Transformed {len(df)} records")
+            return df
         except Exception as e:
-            self.logger.error(f"Error transforming {stock}")
-        return self.formatted_records
+            self.logger.error(f"Error transforming data: {e}")
+            raise
 
     def load(self, data, data_table):
         """

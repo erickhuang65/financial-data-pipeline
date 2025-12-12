@@ -7,7 +7,9 @@ import pandas as pd
 
 class BigQueryConnector:
     
-    def __init__(self, project_id: str, credentials_path: str):
+    def __init__(self, 
+                 project_id: str, 
+                 credentials_path: str):
         """
         Initialize BigQuery client with project ID and optional credentials path.
         
@@ -70,8 +72,12 @@ class BigQueryConnector:
         
 # 2. Data Loading Operations
     # load pandas DataFrame to table
-    def load_dataframe(self, df: pd.DataFrame, destination:str, job_config=None):
-        """Load dataframe from ETL Transformer to BigQuery project
+    def load_dataframe(self, 
+                       df: pd.DataFrame, 
+                       destination:str, 
+                       job_config=None):
+        """
+        Load dataframe from ETL Transformer to BigQuery project
         Args:
             data (obj): Pandas DataFrame with stock data
             destination (str): Table reference (e.g., raw_stock_price)
@@ -92,8 +98,16 @@ class BigQueryConnector:
             self.logger.error(f"Missing destination table")
             raise ValueError(f"Destination table required")
         
-        job_config = bigquery.LoadJobConfig()
-        job_config.write_disposition = 'WRITE_APPEND'
+        if job_config is None: 
+            job_config = bigquery.LoadJobConfig()
+            job_config.write_disposition = 'WRITE_APPEND'
+
+            # Use CSV format as fallback if pyarrow has issues
+            try:
+                import pyarrow
+            except ImportError:
+                job_config.source_format = bigquery.SourceFormat.CSV
+                self.logger.warning("PyArrow not installed, using CSV format")
         
         try:
             job = self.client.load_table_from_dataframe(
@@ -101,6 +115,7 @@ class BigQueryConnector:
                 destination = destination, 
                 job_config = job_config)
             job.result()
+
         except GoogleAPIError as e:
             self.logger.error(f"Error loading dataframe to BigQuery Client: {e}")
 
