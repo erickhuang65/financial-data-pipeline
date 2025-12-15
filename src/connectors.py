@@ -94,7 +94,9 @@ class FMPClient:
     @sleep_and_retry
     @limits(calls=5, period=60)
     def get_five_year_data(self, symbol):
-        """get request for the past 5 year of stock timeseries data"""
+        """
+        Get request for the past 5 year of stock timeseries data
+        """
         
         url = f"{self.api_url}{symbol}&timeseries=1825&apikey={self.api_key}"
 
@@ -121,3 +123,8 @@ class FMPClient:
             self.logger.error(f"Invalid JSON response for {symbol}: {e}")
             self.logger.error(f"Response content: {res.text[:200]}...")
             return None
+    
+    @sleep_and_retry
+    @limits(calls=5, period=60)
+    def get_historical_data(self, symbol):
+        pass

@@ -1,6 +1,12 @@
 import pandas as pd
 import logging
 from typing import Optional
+from datetime import datetime
+import time
+from typing import Optional, List, Dict
+
+# from src.utils.logger import get_logger
+# from src.cache.redis_cache import cached
 
 class ETLProcessor:
     def __init__(self, alpha_vantage_client, fmp_client, bigquery_client):
@@ -16,6 +22,9 @@ class ETLProcessor:
         self.fmp_client = fmp_client
         self.bigquery_client = bigquery_client
         self.logger = logging.getLogger(__name__)
+
+        # Track processing statistics
+        self.stats = {}
         
         # setup logging
         self._setup_logging()
@@ -32,44 +41,121 @@ class ETLProcessor:
         )
         self.logger = logging.getLogger(__name__)
 
-    # could add error handling when symbol isn't found from the ticker_list
-    def advantage_extract(self, ticker_list):
+    def extract_with_retry(self,
+                           extraction_func,
+                           max_retries: int = 3,
+                           retry_delay: int = 5,
+                           **kwargs):
         """
-        Takes ticker as dataframe and process each ticker
-        """
-        self.data = [] # self data is reseted after each extraction is performed
-        if not ticker_list:
-            self.logger.error(f"Stock ticker csv not found")
-        for ticker in ticker_list:
-            try:
-                self.data.append(self.alpha_vantage_client.get_stock_data(ticker))
-                self.logger.info(f"Alpha Advantage data extract complete")
-            except ValueError as e:
-                self.logger.error(f"Error with Alpha Advantage API request {e}")
-            else:
-                self.logger.info(f"Alpha Advantage API request complete")
-        return self.data
+        Execute extraction with retry logic
+        Args:
+            extraction_func: The function to execute extraction
+            max_retries: Maximum number of retry attemps
+            retry_delay: Seconds to wait between retries
 
-    def fmp_extract(self, ticker_list):
+        Return:
+            Extraction result
+        """
+        for attempt in range(max_retries):
+            try:
+                result = extraction_func(**kwargs)
+                return result
+            except Exception as e:
+                self.logger.warning(f"Extraction attemp {attempt + 1}/{max_retries} failed: {e}")
+
+                if attempt < max_retries - 1:
+                    self.logger.info(f"Retrying in {retry_delay} seconds...")
+                    time.sleep(retry_delay)
+                else:
+                    self.logger.error("All retry attemps exhausted")
+                    raise
+
+    # could add error handling when symbol isn't found from the ticker_list
+    # def advantage_extract(self, 
+    #                       ticker_list):
+    #     """
+    #     Takes ticker as dataframe and process each ticker
+    #     """
+    #     if not ticker_list:
+    #         self.logger.error("Ticker list is empty ")
+    #         raise ValueError("Ticker list cannot be empty")
+    #     self.data = [] # self data is reseted after each extraction is performed
+    #     if not ticker_list:
+    #         self.logger.error(f"Stock ticker csv not found")
+    #     for ticker in ticker_list:
+    #         try:
+    #             self.data.append(self.alpha_vantage_client.get_stock_data(ticker))
+    #             self.logger.info(f"Alpha Advantage data extract complete")
+    #         except ValueError as e:
+    #             self.logger.error(f"Error with Alpha Advantage API request {e}")
+    #         else:
+    #             self.logger.info(f"Alpha Advantage API request complete")
+    #     return self.data
+
+    def fmp_extract(self, 
+                    ticker_list: List[str],
+                    data_type: str,
+                    use_retry: bool = True):
         """
         Takes ticker as dataframe and process each ticker
         """
-        self.data = []
-        counter = 0 
         if not ticker_list:
             self.logger.error(f"Ticker file not found")
-            return None
+            raise ValueError("Ticker list cannot be empty")
+        
+        extracted_data = []
+        
+        self.logger.info(f"Starting FMP extraction for {len(ticker_list)} tickers")
+
         for ticker in ticker_list:
             try:
-                self.logger.info(f"Extracting ticker symbol: {ticker}")
-                result = self.fmp_client.get_yearly_data(ticker)
-                if result is None:
-                    self.logger.error(f"Data for {ticker} is None")
-                    continue
-                self.data.append(result)
-            except ValueError as e:
-                self.logger.error(f"Error with FMP API request {e}")
-        return self.data
+                self.logger.info(f"Extracting {data_type} data for ticker symbol: {ticker}")
+                
+                # Select appropriate extraction FMP method
+                if data_type == 'yearly':
+                    if use_retry:
+                        data = self.extract_with_retry(
+                            self.fmp_client.get_yearly_data,
+                            ticker=ticker
+                        )
+                    else:
+                        data = self.fmp_client.get_yearly_data(ticker)
+                        print(f"Retry was skipped")
+                
+                elif data_type == 'historical':
+                    if use_retry:
+                        data = self.extract_with_retry(
+                            self.fmp_client.get_historical_data,
+                            ticker=ticker
+                        )
+                    else:
+                        data = self.fmp_client.get_historical_data
+                
+                else:
+                    # should catch more error
+                    raise ValueError(f"Unknown data type: {data_type}")
+                
+                if data is not None:
+                    extracted_data.append(data)
+                    self.stats['extracted'] += 1
+                    self.logger.info(f"Successfully extracted {ticker}")
+                else:
+                    self.logger.warning(f"No data returned for {ticker}")
+                
+                # Rate limiting
+                time.sleep(0.2)
+                
+            except Exception as e:
+                self.logger.error(f"Failed to extract {ticker}: {e}")
+                self.stats['errors'] += 1
+                continue
+        
+        self.logger.info(
+            f"FMP extraction complete: "
+            f"{len(extracted_data)}/{len(ticker_list)} successful"
+        )
+        
+        return extracted_data
 
     def transform(self, extracted_data: Optional[list[dict]] = None):
         """
