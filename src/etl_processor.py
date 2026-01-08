@@ -24,7 +24,8 @@ class ETLProcessor:
         self.logger = logging.getLogger(__name__)
 
         # Track processing statistics
-        self.stats = {}
+        self.stats = {'extracted': 0,
+                      'errors': 0}
         
         # setup logging
         self._setup_logging()
@@ -92,7 +93,7 @@ class ETLProcessor:
     #             self.logger.info(f"Alpha Advantage API request complete")
     #     return self.data
 
-    def fmp_extract(self, 
+    def extract(self, 
                     ticker_list: List[str],
                     data_type: str,
                     use_retry: bool = True):
@@ -116,7 +117,7 @@ class ETLProcessor:
                     if use_retry:
                         data = self.extract_with_retry(
                             self.fmp_client.get_yearly_data,
-                            ticker=ticker
+                            symbol=ticker
                         )
                     else:
                         data = self.fmp_client.get_yearly_data(ticker)
@@ -126,7 +127,7 @@ class ETLProcessor:
                     if use_retry:
                         data = self.extract_with_retry(
                             self.fmp_client.get_historical_data,
-                            ticker=ticker
+                            symbol=ticker
                         )
                     else:
                         data = self.fmp_client.get_historical_data
@@ -164,10 +165,11 @@ class ETLProcessor:
         Returns:
             Pandas dataframe
         """
-        if not extracted_data:
+        if extracted_data is None or (isinstance(extracted_data, list) and len(extracted_data) == 0):
             self.logger.error("No data to transform")
             print("🚫 No data to transform")
-        
+            return None
+
         try:
             if isinstance(extracted_data[0], list):
                 flat_data = extracted_data[0]
@@ -176,7 +178,7 @@ class ETLProcessor:
 
             df = pd.DataFrame(flat_data)
 
-            df['data'] = pd.to_datetime(df['date'])
+            df['date'] = pd.to_datetime(df['date'])
             df['volume'] = df['volume'].astype('int64')
 
             self.logger.info(f"Transformed {len(df)} records")
